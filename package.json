@@ -22,7 +22,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsup && cp -r static dist/static",
+    "build": "tsup && cp -r static/. dist/static",
     "dev": "tsx src/cli.ts",
     "lint": "eslint src/ tests/",
     "format": "prettier --write .",
