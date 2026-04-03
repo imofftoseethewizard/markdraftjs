@@ -1,0 +1,4 @@
+static/
+dist/
+pnpm-lock.yaml
+tests/input/

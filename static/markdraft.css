@@ -1,0 +1,152 @@
+/* Page layout — match GitHub's README width */
+.preview-page {
+  max-width: 1012px;
+  margin: 64px auto 21px;
+  padding: 0 16px;
+}
+.timeline-comment-wrapper > .timeline-comment:after,
+.timeline-comment-wrapper > .timeline-comment:before {
+  content: none;
+}
+.discussion-timeline.wide {
+  width: 920px;
+}
+
+/* Dark mode for page chrome outside .markdown-body.
+   github-markdown-css handles .markdown-body via [data-theme="dark"]
+   custom properties, but doesn't style the surrounding page elements. */
+[data-theme="dark"] body {
+  background-color: var(--bgColor-default, #0d1117);
+  color: var(--fgColor-default, #e6edf3);
+}
+[data-theme="dark"] .Box {
+  border-color: var(--borderColor-default, #3d444d);
+  background-color: var(--bgColor-default, #0d1117);
+}
+[data-theme="dark"] .Box-header {
+  background-color: var(--bgColor-muted, #151b23);
+  border-bottom-color: var(--borderColor-default, #3d444d);
+}
+[data-theme="dark"] .Box-body {
+  background-color: var(--bgColor-default, #0d1117);
+}
+[data-theme="dark"] .color-bg-default {
+  background-color: var(--bgColor-muted, #151b23);
+  color: var(--fgColor-default, #e6edf3);
+}
+
+/* GitHub-style alerts ([!NOTE], [!TIP], etc.) */
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  border-left: 0.25rem solid;
+  border-radius: 6px;
+}
+.markdown-alert > :first-child { margin-top: 0; }
+.markdown-alert > :last-child { margin-bottom: 0; }
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.markdown-alert .markdown-alert-title svg {
+  margin-right: 8px;
+}
+.markdown-alert-note { border-left-color: #0969da; }
+.markdown-alert-note .markdown-alert-title { color: #0969da; }
+.markdown-alert-tip { border-left-color: #1a7f37; }
+.markdown-alert-tip .markdown-alert-title { color: #1a7f37; }
+.markdown-alert-important { border-left-color: #8250df; }
+.markdown-alert-important .markdown-alert-title { color: #8250df; }
+.markdown-alert-warning { border-left-color: #9a6700; }
+.markdown-alert-warning .markdown-alert-title { color: #9a6700; }
+.markdown-alert-caution { border-left-color: #cf222e; }
+.markdown-alert-caution .markdown-alert-title { color: #cf222e; }
+
+/* GeoJSON map containers */
+.markdraft-map {
+  width: 100%;
+  height: 400px;
+  margin: 16px 0;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  overflow: hidden;
+}
+[data-theme="dark"] .markdraft-map {
+  border-color: var(--borderColor-default, #3d444d);
+}
+
+/* STL 3D model containers */
+.markdraft-stl {
+  width: 100%;
+  height: 400px;
+  margin: 16px 0;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  overflow: hidden;
+}
+[data-theme="dark"] .markdraft-stl {
+  border-color: var(--borderColor-default, #3d444d);
+}
+.markdraft-stl canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Breadcrumb navigation */
+.markdraft-breadcrumb {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.markdraft-breadcrumb a {
+  color: var(--fgColor-accent, #0969da);
+  text-decoration: none;
+}
+.markdraft-breadcrumb a:hover {
+  text-decoration: underline;
+}
+.markdraft-nav {
+  padding: 0 16px 8px;
+}
+.markdraft-nav summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--fgColor-muted, #656d76);
+  user-select: none;
+}
+.markdraft-nav .markdraft-listing {
+  margin-top: 4px;
+}
+.markdraft-nav .markdraft-listing .current a {
+  font-weight: 600;
+  color: var(--fgColor-default, #1f2328);
+}
+[data-theme="dark"] .markdraft-nav .markdraft-listing .current a {
+  color: var(--fgColor-default, #e6edf3);
+}
+
+/* Directory listing */
+.markdraft-listing {
+  list-style: none;
+  padding: 0;
+}
+.markdraft-listing li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--borderColor-default, #d0d7de);
+  font-size: 14px;
+}
+.markdraft-listing a {
+  text-decoration: none;
+  color: var(--fgColor-accent, #0969da);
+}
+.markdraft-listing a:hover {
+  text-decoration: underline;
+}
+
+/* KaTeX display math centering */
+.katex-display {
+  text-align: center;
+  margin: 1em 0;
+}
