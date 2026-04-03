@@ -22,7 +22,7 @@ export const DEFAULT_URL_PREFIX = "/__";
 // -- Server defaults (overridable via ~/.markdraft/settings.json) ---------------
 
 export const HOST = "localhost";
-export const PORT = 6419;
+export const PORT = 6565;
 export const AUTOREFRESH = true;
 export const QUIET = false;
 export const CACHE_DIRECTORY = "cache-{version}";

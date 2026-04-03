@@ -37,8 +37,14 @@ async function waitForServer(host: string, port: number, signal?: AbortSignal): 
 
 export async function startBrowser(url: string): Promise<void> {
   try {
-    const { default: open } = await import("open");
-    await open(url);
+    const { exec } = await import("node:child_process");
+    const command =
+      process.platform === "darwin"
+        ? `open ${JSON.stringify(url)}`
+        : process.platform === "win32"
+          ? `start "" ${JSON.stringify(url)}`
+          : `xdg-open ${JSON.stringify(url)}`;
+    exec(command);
   } catch {
     // Ignore errors opening browser
   }

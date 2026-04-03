@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import { parseArgs } from "node:util";
 
 import { clearCache, exportFile, serve } from "./api.js";
 
@@ -49,39 +49,52 @@ export async function main(argv?: string[]): Promise<number> {
     return 2;
   }
 
-  const program = new Command("draft")
-    .description("Render local readme files before sending off to GitHub.")
-    .argument("[path]", "File or directory to render (- for stdin)")
-    .argument("[address]", "Host:port to listen on, or output file for --export")
-    .option("-V", "Show version and exit")
-    .option("--user-content", "Render as user content", false)
-    .option("--wide", "Use wide layout", false)
-    .option("--clear", "Clear cached assets", false)
-    .option("--export", "Export to HTML file", false)
-    .option("--no-inline", "Use CDN links instead of inlining (with --export)")
-    .option("-b, --browser", "Open in browser", false)
-    .option("--title <title>", "Override page title")
-    .option("--norefresh", "Disable auto-refresh", false)
-    .option("--quiet", "Suppress output", false)
-    .option("--theme <theme>", "Theme: light, dark, auto")
-    .exitOverride()
-    .configureOutput({
-      writeOut: (str) => process.stdout.write(str),
-      writeErr: (str) => process.stderr.write(str),
-    });
+  if (args.includes("-h") || args.includes("--help")) {
+    process.stdout.write(
+      `Usage: draft [options] [path] [address]
 
-  let parsed: Command;
-  try {
-    parsed = program.parse(["node", "draft", ...args]);
-  } catch (e) {
-    // Commander throws on --help and --version with exitOverride
-    if (e instanceof Error && "exitCode" in e) {
-      return (e as Error & { exitCode: number }).exitCode;
-    }
-    throw e;
+Render local readme files before sending off to GitHub.
+
+Arguments:
+  path                   File or directory to render (- for stdin)
+  address                Host:port to listen on, or output file for --export
+
+Options:
+  -V                     Show version and exit
+  --user-content         Render as user content
+  --wide                 Use wide layout
+  --clear                Clear cached assets
+  --export               Export to HTML file
+  --no-inline            Use CDN links instead of inlining (with --export)
+  -b, --browser          Open in browser
+  --title <title>        Override page title
+  --norefresh            Disable auto-refresh
+  --quiet                Suppress output
+  --theme <theme>        Theme: light, dark, auto
+  -h, --help             Show this help
+`,
+    );
+    return 0;
   }
 
-  const opts = parsed.opts();
+  const { values: opts, positionals } = parseArgs({
+    args,
+    options: {
+      V: { type: "boolean" },
+      "user-content": { type: "boolean", default: false },
+      wide: { type: "boolean", default: false },
+      clear: { type: "boolean", default: false },
+      export: { type: "boolean", default: false },
+      "no-inline": { type: "boolean", default: false },
+      browser: { type: "boolean", short: "b", default: false },
+      title: { type: "string" },
+      norefresh: { type: "boolean", default: false },
+      quiet: { type: "boolean", default: false },
+      theme: { type: "string" },
+    },
+    allowPositionals: true,
+    strict: true,
+  });
 
   if (opts.V) {
     console.log(`Markdraft ${VERSION}`);
@@ -104,17 +117,16 @@ export async function main(argv?: string[]): Promise<number> {
     }
   }
 
-  const rawArgs = parsed.args;
-  const [pathArg, addressArg] = resolvePathAddress(rawArgs[0], rawArgs[1]);
+  const [pathArg, addressArg] = resolvePathAddress(positionals[0], positionals[1]);
 
   // Export mode
   if (opts.export) {
     try {
       await exportFile({
         path: pathArg ?? null,
-        userContent: opts.userContent,
+        userContent: opts["user-content"],
         wide: opts.wide,
-        renderInline: opts.inline,
+        renderInline: !opts["no-inline"],
         outFilename: addressArg ?? null,
         title: opts.title,
         quiet: opts.quiet,
@@ -143,11 +155,11 @@ export async function main(argv?: string[]): Promise<number> {
       path: resolvedPath ?? null,
       host,
       port,
-      userContent: opts.userContent,
+      userContent: opts["user-content"],
       wide: opts.wide,
       title: opts.title,
       autorefresh: !opts.norefresh,
-      browser: opts.browser,
+      browser: opts.browser as boolean,
       quiet: opts.quiet,
       theme,
     });
