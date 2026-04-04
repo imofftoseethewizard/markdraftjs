@@ -8,10 +8,12 @@ export default defineConfig({
   target: "node20",
   splitting: false,
   sourcemap: true,
-  banner: ({ entryPoint }) => {
-    if (entryPoint?.includes("cli.ts")) {
-      return { js: "#!/usr/bin/env node" };
+  onSuccess: async () => {
+    const fs = await import("fs");
+    const cli = fs.readFileSync("dist/cli.js", "utf-8");
+    if (!cli.startsWith("#!/")) {
+      fs.writeFileSync("dist/cli.js", "#!/usr/bin/env node\n" + cli);
     }
-    return {};
+    fs.chmodSync("dist/cli.js", 0o755);
   },
 });

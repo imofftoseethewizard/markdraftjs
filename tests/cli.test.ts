@@ -20,12 +20,44 @@ describe("CLI main()", () => {
     }
   });
 
-  it("version flag", async () => {
+  it("version flag -V", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const code = await main(["-V"]);
     expect(code).toBe(0);
     expect(log).toHaveBeenCalledWith(expect.stringContaining("Markdraft"));
     log.mockRestore();
+  });
+
+  it("version flag --version", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const code = await main(["--version"]);
+    expect(code).toBe(0);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("Markdraft"));
+    log.mockRestore();
+  });
+
+  it("help flag --help", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const code = await main(["--help"]);
+    expect(code).toBe(0);
+    expect(write).toHaveBeenCalledWith(expect.stringContaining("Usage:"));
+    write.mockRestore();
+  });
+
+  it("unknown option returns 2", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const code = await main(["--bogus"]);
+    expect(code).toBe(2);
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("Unknown option"));
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("--help"));
+    err.mockRestore();
+  });
+
+  it("nonexistent path returns 1", async () => {
+    const dir = tmpDir();
+    process.env.MARKDRAFT_HOME = path.join(dir, ".markdraft");
+    const code = await main(["--export", "/nonexistent/path/to/file.md"]);
+    expect(code).toBe(1);
   });
 
   it("deprecated -a flag", async () => {

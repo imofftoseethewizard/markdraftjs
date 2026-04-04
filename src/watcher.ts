@@ -15,15 +15,15 @@ export class FileWatcher {
     let lastUpdated = this.reader.lastUpdated(this.subpath);
     while (!signal.aborted) {
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, this.interval);
-        signal.addEventListener(
-          "abort",
-          () => {
-            clearTimeout(timer);
-            resolve();
-          },
-          { once: true },
-        );
+        const onAbort = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        const timer = setTimeout(() => {
+          signal.removeEventListener("abort", onAbort);
+          resolve();
+        }, this.interval);
+        signal.addEventListener("abort", onAbort, { once: true });
       });
       if (signal.aborted) break;
       const updated = this.reader.lastUpdated(this.subpath);

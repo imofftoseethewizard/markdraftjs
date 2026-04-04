@@ -328,6 +328,36 @@ describe("FileWatcher", () => {
     await watchPromise;
     expect(results).toEqual([]);
   });
+
+  it("does not leak abort listeners across iterations", async () => {
+    const dir = tmpDir();
+    fs.writeFileSync(path.join(dir, "README.md"), "v1");
+    const reader = new DirectoryReader(dir);
+    // Use a very short interval so we accumulate many iterations quickly
+    const watcher = new FileWatcher(reader, null, 10);
+    const abort = new AbortController();
+
+    // Record warnings
+    const warnings: string[] = [];
+    const onWarning = (w: Error) => {
+      if (w.name === "MaxListenersExceededWarning") warnings.push(w.message);
+    };
+    process.on("warning", onWarning);
+
+    const watchPromise = (async () => {
+      for await (const _changed of watcher.watch(abort.signal)) {
+        // not reached without file changes
+      }
+    })();
+
+    // Let it run for 20+ iterations (10ms * 20 = 200ms)
+    await new Promise((r) => setTimeout(r, 250));
+    abort.abort();
+    await watchPromise;
+
+    process.off("warning", onWarning);
+    expect(warnings).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------

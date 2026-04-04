@@ -1,4 +1,5 @@
 import http from "node:http";
+import { setMaxListeners } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
 import posixpath from "node:path/posix";
@@ -149,6 +150,7 @@ export class PreviewServer {
     this.assets = assets;
     this.config = config;
     this.abortController = new AbortController();
+    setMaxListeners(0, this.abortController.signal);
     this.server = http.createServer((req, res) => this.handleRequest(req, res));
   }
 
@@ -243,21 +245,42 @@ export class PreviewServer {
     this.abortController.abort();
     return new Promise((resolve) => {
       this.server.close(() => resolve());
+      // Force-close keep-alive connections that the browser may reuse
+      // to reconnect SSE after abort.
+      this.server.closeAllConnections();
     });
   }
 
   private handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
-    const urlPath = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`).pathname;
-    const urlPrefix = this.config.url_prefix;
+    let urlPath: string;
+    try {
+      urlPath = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`).pathname;
+    } catch {
+      this.sendError(res, 400);
+      return;
+    }
 
-    if (urlPath.startsWith(urlPrefix + "/api/content")) {
-      this.handleApiContent(urlPath, urlPrefix, res);
-    } else if (urlPath.startsWith(urlPrefix + "/api/refresh")) {
-      this.handleApiRefresh(urlPath, urlPrefix, req, res);
-    } else if (urlPath.startsWith(urlPrefix + "/static/")) {
-      this.handleStatic(urlPath, urlPrefix, res);
-    } else {
-      this.handlePage(urlPath, res);
+    try {
+      const urlPrefix = this.config.url_prefix;
+
+      if (urlPath.startsWith(urlPrefix + "/api/content")) {
+        this.handleApiContent(urlPath, urlPrefix, res);
+      } else if (urlPath.startsWith(urlPrefix + "/api/refresh")) {
+        this.handleApiRefresh(urlPath, urlPrefix, req, res);
+      } else if (urlPath.startsWith(urlPrefix + "/static/")) {
+        this.handleStatic(urlPath, urlPrefix, res);
+      } else {
+        this.handlePage(urlPath, res);
+      }
+    } catch (e) {
+      if (!res.headersSent) {
+        this.sendError(res, 500);
+      }
+      if (!this.config.quiet) {
+        const msg = e instanceof Error ? e.message : String(e);
+        process.stderr.write(` * Internal error: ${msg}\n`);
+      }
+      return;
     }
 
     if (!this.config.quiet) {
@@ -416,6 +439,7 @@ export class PreviewServer {
       } catch {
         // Client disconnected or server shutting down
       }
+      res.end();
     })();
   }
 

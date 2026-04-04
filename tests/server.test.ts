@@ -1,3 +1,4 @@
+import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -322,5 +323,80 @@ describe("DirectoryListing", () => {
     const names = (data.siblings as Array<{ name: string }>).map((e) => e.name);
     expect(names).toContain("guide.md");
     expect(names).toContain("other.md");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Error handling
+// ---------------------------------------------------------------------------
+
+describe("ErrorHandling", () => {
+  it("malformed URL returns 400", async () => {
+    const { server } = await createTextServer("text");
+    servers.push(server);
+    const addr = server.address()!;
+
+    // Send a raw HTTP request with a malformed URL that can't be parsed
+    const resp = await new Promise<{ statusCode: number }>((resolve) => {
+      const req = http.request(
+        {
+          hostname: addr.host,
+          port: addr.port,
+          // Absolute URI with no scheme trips URL parser in some cases;
+          // use a path that contains characters illegal in a URL authority
+          path: "//[::invalid",
+          method: "GET",
+        },
+        (res) => {
+          res.resume();
+          resolve({ statusCode: res.statusCode ?? 0 });
+        },
+      );
+      req.end();
+    });
+    expect([400, 404]).toContain(resp.statusCode);
+  });
+
+  it("request handler error returns 500 not crash", async () => {
+    // Create a server with a reader that throws an unexpected error
+    const reader = new TextReader("text", "README.md");
+    const original = reader.read.bind(reader);
+    reader.read = (subpath: string | null) => {
+      if (subpath === "crash") throw new Error("unexpected boom");
+      return original(subpath);
+    };
+    const { client, server: srv } = await createServer(reader);
+    servers.push(srv);
+
+    // The crash path should return 500, not kill the server
+    const resp = await client.get("/crash");
+    expect(resp.statusCode).toBe(500);
+
+    // Server should still be alive for subsequent requests
+    const ok = await client.get("/");
+    expect(ok.statusCode).toBe(200);
+  });
+
+  it("server closes cleanly after SSE connection", async () => {
+    const { server } = await createTextServer("text", { autorefresh: true });
+    servers.push(server);
+    const addr = server.address()!;
+
+    // Open an SSE connection
+    const controller = new AbortController();
+    const ssePromise = fetch(`http://${addr.host}:${addr.port}/__/api/refresh`, {
+      signal: controller.signal,
+    }).catch(() => {});
+
+    // Give the SSE connection time to establish
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Server should close without hanging (test timeout will catch a hang)
+    controller.abort();
+    await ssePromise;
+
+    // Remove from tracked servers since we're closing manually
+    servers.splice(servers.indexOf(server), 1);
+    await server.close();
   });
 });

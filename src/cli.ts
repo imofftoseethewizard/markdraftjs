@@ -4,6 +4,28 @@ import { clearCache, exportFile, serve } from "./api.js";
 
 const VERSION = "1.0.0";
 const VALID_THEME_OPTIONS = ["light", "dark", "auto"];
+const HELP = `Usage: draft [options] [path] [address]
+
+Render local readme files before sending off to GitHub.
+
+Arguments:
+  path                   File or directory to render (- for stdin)
+  address                Host:port to listen on, or output file for --export
+
+Options:
+  -V, --version          Show version and exit
+  --user-content         Render as user content
+  --wide                 Use wide layout
+  --clear                Clear cached assets
+  --export               Export to HTML file
+  --no-inline            Use CDN links instead of inlining (with --export)
+  -b, --browser          Open in browser
+  --title <title>        Override page title
+  --norefresh            Disable auto-refresh
+  --quiet                Suppress output
+  --theme <theme>        Theme: light, dark, auto
+  -h, --help             Show this help
+`;
 
 function splitAddress(address: string | null): [string | null, number | null] {
   if (!address) return [null, null];
@@ -50,56 +72,45 @@ export async function main(argv?: string[]): Promise<number> {
   }
 
   if (args.includes("-h") || args.includes("--help")) {
-    process.stdout.write(
-      `Usage: draft [options] [path] [address]
-
-Render local readme files before sending off to GitHub.
-
-Arguments:
-  path                   File or directory to render (- for stdin)
-  address                Host:port to listen on, or output file for --export
-
-Options:
-  -V                     Show version and exit
-  --user-content         Render as user content
-  --wide                 Use wide layout
-  --clear                Clear cached assets
-  --export               Export to HTML file
-  --no-inline            Use CDN links instead of inlining (with --export)
-  -b, --browser          Open in browser
-  --title <title>        Override page title
-  --norefresh            Disable auto-refresh
-  --quiet                Suppress output
-  --theme <theme>        Theme: light, dark, auto
-  -h, --help             Show this help
-`,
-    );
+    process.stdout.write(HELP);
     return 0;
   }
 
-  const { values: opts, positionals } = parseArgs({
-    args,
-    options: {
-      V: { type: "boolean" },
-      "user-content": { type: "boolean", default: false },
-      wide: { type: "boolean", default: false },
-      clear: { type: "boolean", default: false },
-      export: { type: "boolean", default: false },
-      "no-inline": { type: "boolean", default: false },
-      browser: { type: "boolean", short: "b", default: false },
-      title: { type: "string" },
-      norefresh: { type: "boolean", default: false },
-      quiet: { type: "boolean", default: false },
-      theme: { type: "string" },
-    },
-    allowPositionals: true,
-    strict: true,
-  });
-
-  if (opts.V) {
+  if (args.includes("-V") || args.includes("--version")) {
     console.log(`Markdraft ${VERSION}`);
     return 0;
   }
+
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args,
+      options: {
+        V: { type: "boolean" },
+        version: { type: "boolean" },
+        "user-content": { type: "boolean", default: false },
+        wide: { type: "boolean", default: false },
+        clear: { type: "boolean", default: false },
+        export: { type: "boolean", default: false },
+        "no-inline": { type: "boolean", default: false },
+        browser: { type: "boolean", short: "b", default: false },
+        title: { type: "string" },
+        norefresh: { type: "boolean", default: false },
+        quiet: { type: "boolean", default: false },
+        theme: { type: "string" },
+      },
+      allowPositionals: true,
+      strict: true,
+    });
+  } catch (e) {
+    if (e instanceof TypeError && "code" in e) {
+      console.error(e.message);
+      console.error("See draft --help for usage.");
+      return 2;
+    }
+    throw e;
+  }
+  const { values: opts, positionals } = parsed;
 
   if (opts.clear) {
     clearCache();
@@ -169,24 +180,34 @@ Options:
       console.log("Error:", e.message);
       return 1;
     }
-    if (e instanceof Error && "code" in e && (e as NodeJS.ErrnoException).code === "EADDRINUSE") {
-      console.log("Error:", e.message);
-      console.log(
+    const code = e instanceof Error && "code" in e ? (e as NodeJS.ErrnoException).code : null;
+    if (code === "EADDRINUSE") {
+      console.error("Error:", (e as Error).message);
+      console.error(
         "This port is in use. Is a markdraft server already running? " +
           "Stop that instance or specify another port here.",
       );
+      return 1;
+    }
+    if (code === "ENOTFOUND") {
+      console.error("Error: could not resolve address", JSON.stringify(host ?? resolvedAddress));
       return 1;
     }
     throw e;
   }
 }
 
-// Run when executed directly
-const isMainModule =
-  typeof process !== "undefined" &&
-  process.argv[1] &&
-  (process.argv[1].endsWith("/cli.js") || process.argv[1].endsWith("/cli.ts"));
-
-if (isMainModule) {
-  main().then((code) => process.exit(code));
-}
+main().then(
+  (code) => process.exit(code),
+  (e) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    const code =
+      e instanceof Error && "code" in e ? (e as NodeJS.ErrnoException).code : null;
+    if (code) {
+      console.error(`Error (${code}): ${msg}`);
+    } else {
+      console.error(`Error: ${msg}`);
+    }
+    process.exit(1);
+  },
+);
