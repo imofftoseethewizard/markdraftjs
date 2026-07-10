@@ -261,6 +261,52 @@ Create `~/.markdraft/settings.json` to override defaults:
 The `MARKDRAFT_HOME` environment variable overrides the config
 directory (default `~/.markdraft`).
 
+### Custom syntax highlighting (`HIGHLIGHT_LANGUAGES`)
+
+Markdraft renders code fences with [highlight.js](https://highlightjs.org/)
+v11, which only ships the languages bundled with the CDN build. To highlight
+a fenced language highlight.js doesn't know about, register your own
+highlight.js language definer via `HIGHLIGHT_LANGUAGES` in
+`~/.markdraft/settings.json`:
+
+```json
+{
+  "HIGHLIGHT_LANGUAGES": [
+    {
+      "name": "ken",
+      "path": "/workspaces/ken/tooling/highlight-js/ken.js",
+      "global": "hljsDefineKen"
+    }
+  ]
+}
+```
+
+Each entry:
+
+- `name` (required) -- the highlight.js language name/alias, i.e. what a
+  ` ```name ` fence matches.
+- `path` (required) -- path to the language definer JS file. A relative
+  path is resolved against the config directory (`~/.markdraft`, or
+  `MARKDRAFT_HOME`); an absolute path is used as-is.
+- `global` (optional) -- the `window` global the file assigns its definer
+  function to, for a plain `<script>` that doesn't call
+  `hljs.registerLanguage` itself. Omit this for a file that self-registers,
+  such as most official highlight.js CDN language files.
+
+A malformed entry (missing/wrong-typed `name` or `path`, or a non-string
+`global`) is dropped silently at config-parse time. A well-formed entry whose
+file can't be found at render time is skipped with a `console.warn` (unless
+`QUIET` is set) rather than crashing the preview. Markdraft doesn't know
+anything about any specific language -- Ken is just an example consumer of a
+generic facility; register any highlight.js-compatible definer the same way.
+
+Both the live server and `--export` inject the configured language(s) after
+`highlight.min.js` and before Markdraft's own renderer script runs, so
+`hljs.getLanguage(name)` is already true by the time a fence is highlighted.
+A file with `global` set gets an additional
+`hljs.registerLanguage(name, window[global])` call; a self-registering file
+just gets loaded.
+
 
 ## Architecture
 

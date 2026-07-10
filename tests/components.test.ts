@@ -391,6 +391,68 @@ describe("Config loading", () => {
     expect(result.HOST).toBe("0.0.0.0");
     expect("foo" in result).toBe(false);
   });
+
+  it("HIGHLIGHT_LANGUAGES absent leaves the key undefined", () => {
+    const dir = tmpDir();
+    fs.writeFileSync(path.join(dir, "settings.json"), JSON.stringify({ HOST: "0.0.0.0" }));
+    const result = loadUserSettings(dir);
+    expect(result.HIGHLIGHT_LANGUAGES).toBeUndefined();
+  });
+
+  it("HIGHLIGHT_LANGUAGES parses a valid entry, resolving a relative path", () => {
+    const dir = tmpDir();
+    fs.writeFileSync(
+      path.join(dir, "settings.json"),
+      JSON.stringify({
+        HIGHLIGHT_LANGUAGES: [{ name: "ken", path: "langs/ken.js", global: "hljsDefineKen" }],
+      }),
+    );
+    const result = loadUserSettings(dir);
+    expect(result.HIGHLIGHT_LANGUAGES).toEqual([
+      { name: "ken", path: path.join(dir, "langs/ken.js"), global: "hljsDefineKen" },
+    ]);
+  });
+
+  it("HIGHLIGHT_LANGUAGES keeps an absolute path unchanged", () => {
+    const dir = tmpDir();
+    fs.writeFileSync(
+      path.join(dir, "settings.json"),
+      JSON.stringify({ HIGHLIGHT_LANGUAGES: [{ name: "ken", path: "/abs/ken.js" }] }),
+    );
+    const result = loadUserSettings(dir);
+    expect(result.HIGHLIGHT_LANGUAGES).toEqual([{ name: "ken", path: "/abs/ken.js" }]);
+  });
+
+  it("HIGHLIGHT_LANGUAGES drops malformed entries but keeps valid ones", () => {
+    const dir = tmpDir();
+    fs.writeFileSync(
+      path.join(dir, "settings.json"),
+      JSON.stringify({
+        HIGHLIGHT_LANGUAGES: [
+          { name: "ken", path: "/abs/ken.js" },
+          { path: "/abs/missing-name.js" },
+          { name: "", path: "/abs/empty-name.js" },
+          { name: "no-path" },
+          { name: "bad-global", path: "/abs/bad-global.js", global: 123 },
+          "not-an-object",
+          null,
+          42,
+        ],
+      }),
+    );
+    const result = loadUserSettings(dir);
+    expect(result.HIGHLIGHT_LANGUAGES).toEqual([{ name: "ken", path: "/abs/ken.js" }]);
+  });
+
+  it("HIGHLIGHT_LANGUAGES tolerates a non-array value", () => {
+    const dir = tmpDir();
+    fs.writeFileSync(
+      path.join(dir, "settings.json"),
+      JSON.stringify({ HIGHLIGHT_LANGUAGES: "not-an-array" }),
+    );
+    const result = loadUserSettings(dir);
+    expect(result.HIGHLIGHT_LANGUAGES).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

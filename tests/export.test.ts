@@ -167,6 +167,75 @@ describe("ExportEmoji", () => {
 // Export output
 // ---------------------------------------------------------------------------
 
+describe("ExportHighlightLanguages", () => {
+  function fixture(dir: string, filename: string, content: string): string {
+    const p = path.join(dir, filename);
+    fs.writeFileSync(p, content);
+    return p;
+  }
+
+  it("omits highlight-language script when none configured", () => {
+    const reader = new TextReader("text", "README.md");
+    const html = exportPage(reader, null, makeAssets());
+    expect(html).toContain("/* dummy highlight.min.js */");
+    expect(html).not.toContain("registerLanguage");
+  });
+
+  it("inlines the file and registration call for a `global` entry, after highlight.min.js", () => {
+    const dir = tmpDir();
+    fixture(dir, "fixture-lang.js", "/* FIXTURE_LANG_BODY */ window.hljsDefineFixture = 1;");
+    const reader = new TextReader("text", "README.md");
+    const html = exportPage(reader, null, makeAssets(), {
+      highlightLanguages: [
+        { name: "fixture", path: path.join(dir, "fixture-lang.js"), global: "hljsDefineFixture" },
+      ],
+    });
+    expect(html).toContain("FIXTURE_LANG_BODY");
+    expect(html).toContain('hljs.registerLanguage("fixture", window["hljsDefineFixture"]);');
+
+    const highlightIdx = html.indexOf("/* dummy highlight.min.js */");
+    const fixtureIdx = html.indexOf("FIXTURE_LANG_BODY");
+    const clientJsIdx = html.indexOf("marked.parse"); // inside the appended client_js block
+    expect(highlightIdx).toBeGreaterThan(-1);
+    expect(fixtureIdx).toBeGreaterThan(highlightIdx);
+    expect(clientJsIdx).toBeGreaterThan(fixtureIdx);
+  });
+
+  it("inlines only the file (no registration call) for a self-registering entry", () => {
+    const dir = tmpDir();
+    fixture(dir, "self-reg.js", "/* SELF_REG_BODY */ hljs.registerLanguage('selfreg', {});");
+    const reader = new TextReader("text", "README.md");
+    const html = exportPage(reader, null, makeAssets(), {
+      highlightLanguages: [{ name: "selfreg", path: path.join(dir, "self-reg.js") }],
+    });
+    expect(html).toContain("SELF_REG_BODY");
+    // No *additional* markdraft-emitted registration call beyond the file's own.
+    expect(html).not.toContain('hljs.registerLanguage("selfreg"');
+  });
+
+  it("also inlines the highlight-language file in CDN (--no-inline) mode", () => {
+    const dir = tmpDir();
+    fixture(dir, "fixture-lang.js", "/* FIXTURE_LANG_CDN_BODY */");
+    const reader = new TextReader("text", "README.md");
+    const html = exportPage(reader, null, makeAssets(), {
+      inline: false,
+      highlightLanguages: [{ name: "fixture", path: path.join(dir, "fixture-lang.js") }],
+    });
+    expect(html).toContain("cdn.jsdelivr.net");
+    expect(html).toContain("FIXTURE_LANG_CDN_BODY");
+  });
+
+  it("skips a configured entry whose file is missing, without throwing", () => {
+    const reader = new TextReader("text", "README.md");
+    expect(() =>
+      exportPage(reader, null, makeAssets(), {
+        quiet: true,
+        highlightLanguages: [{ name: "ghost", path: "/no/such/file/ghost.js" }],
+      }),
+    ).not.toThrow();
+  });
+});
+
 describe("ExportOutput", () => {
   it("to file", () => {
     const reader = new TextReader("# Test", "README.md");

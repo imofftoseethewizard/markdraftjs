@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 
 import { AssetCache } from "./assets.js";
 import { CDN_ASSETS, KATEX_CSS_URL } from "./config.js";
+import { registrationScript, resolveHighlightLanguages } from "./highlight.js";
 import type { ReadmeReader } from "./readers.js";
+import type { HighlightLanguageConfig } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -89,6 +91,29 @@ const USER_CONTENT_BODY = `\
                     </div>
                   </div>`;
 
+// `HIGHLIGHT_LANGUAGES` entries have no CDN equivalent -- they're local
+// files the operator listed in their own settings.json -- so a static
+// export always inlines their contents (regardless of `--no-inline`, which
+// only chooses between inlining vs. CDN-linking the *bundled* assets).
+// Placed after the (inlined or CDN-linked) `highlight.min.js` entry in
+// `scriptAssets`, so `hljs.getLanguage(name)` is truthy before
+// `markdraft.js`'s renderer (appended separately, after `{script_assets}`)
+// runs.
+function buildHighlightLanguageScriptAssets(
+  entries: HighlightLanguageConfig[],
+  quiet: boolean,
+): string {
+  const resolved = resolveHighlightLanguages(entries, quiet);
+  const parts: string[] = [];
+  for (const entry of resolved) {
+    const content = fs.readFileSync(entry.path, "utf-8");
+    parts.push("  <script>\n" + content + "\n  </script>");
+    const registration = registrationScript(entry);
+    if (registration) parts.push(registration);
+  }
+  return parts.join("\n");
+}
+
 function readClientJs(): string {
   // Check built location first (dist/static/)
   const builtPath = path.join(__dirname, "static", "markdraft.js");
@@ -115,6 +140,7 @@ export function exportPage(
     userContent?: boolean;
     wide?: boolean;
     quiet?: boolean;
+    highlightLanguages?: HighlightLanguageConfig[];
   } = {},
 ): string {
   const {
@@ -123,6 +149,8 @@ export function exportPage(
     title = null,
     theme = "light",
     userContent = false,
+    quiet = false,
+    highlightLanguages = [],
   } = options;
 
   const raw = reader.read(subpath);
@@ -232,6 +260,11 @@ export function exportPage(
     ]
       .map((name) => `  <script src="${cdn[name]}"></script>`)
       .join("\n");
+  }
+
+  const highlightLanguageScripts = buildHighlightLanguageScriptAssets(highlightLanguages, quiet);
+  if (highlightLanguageScripts) {
+    scriptAssets += (scriptAssets ? "\n" : "") + highlightLanguageScripts;
   }
 
   const clientJs = readClientJs();

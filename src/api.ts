@@ -41,6 +41,7 @@ function resolveConfig(opts: {
     user_content: opts.userContent ?? false,
     wide: opts.wide ?? false,
     url_prefix: opts.urlPrefix ?? "/__",
+    highlight_languages: settings.HIGHLIGHT_LANGUAGES ?? [],
   };
 }
 
@@ -121,6 +122,7 @@ export async function exportFile(opts: {
   const reader = makeReader(opts.path);
   const assets = makeCache();
   await assets.ensureCached(opts.quiet ?? false);
+  const settings = loadUserSettings();
 
   let exportToStdout = opts.outFilename === "-";
   let outFilename = opts.outFilename ?? null;
@@ -153,6 +155,7 @@ export async function exportFile(opts: {
     userContent: opts.userContent,
     wide: opts.wide,
     quiet: opts.quiet,
+    highlightLanguages: settings.HIGHLIGHT_LANGUAGES ?? [],
   });
 }
 

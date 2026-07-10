@@ -400,3 +400,82 @@ describe("ErrorHandling", () => {
     await server.close();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Highlight languages
+// ---------------------------------------------------------------------------
+
+describe("HighlightLanguages", () => {
+  function writeFixture(dir: string, filename: string, content: string): string {
+    const p = path.join(dir, filename);
+    fs.writeFileSync(p, content);
+    return p;
+  }
+
+  it("omits highlight-language scripts when none configured", async () => {
+    const client = await ts("text");
+    const resp = await client.get("/");
+    expect(resp.text()).not.toContain("registerLanguage");
+    expect(resp.text()).not.toContain("/__/highlight-lang/");
+  });
+
+  it("emits a src script and registration call for a `global` entry, after highlight.min.js", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "markdraftjs-hl-"));
+    writeFixture(dir, "fixture-lang.js", "window.hljsDefineFixture = function () {};");
+    const client = await ts("text", {
+      highlight_languages: [
+        { name: "fixture", path: path.join(dir, "fixture-lang.js"), global: "hljsDefineFixture" },
+      ],
+    });
+    const resp = await client.get("/");
+    const html = resp.text();
+    const src = `/__/highlight-lang/${encodeURIComponent("fixture")}`;
+    expect(html).toContain(`<script src="${src}"></script>`);
+    expect(html).toContain('hljs.registerLanguage("fixture", window["hljsDefineFixture"]);');
+
+    const highlightIdx = html.indexOf("highlight.min.js");
+    const fixtureIdx = html.indexOf(src);
+    const markdraftIdx = html.lastIndexOf("markdraft.js");
+    expect(highlightIdx).toBeGreaterThan(-1);
+    expect(fixtureIdx).toBeGreaterThan(highlightIdx);
+    expect(markdraftIdx).toBeGreaterThan(fixtureIdx);
+  });
+
+  it("emits only a src script (no registration call) for a self-registering entry", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "markdraftjs-hl-"));
+    writeFixture(dir, "self-reg.js", "hljs.registerLanguage('selfreg', function () {});");
+    const client = await ts("text", {
+      highlight_languages: [{ name: "selfreg", path: path.join(dir, "self-reg.js") }],
+    });
+    const resp = await client.get("/");
+    const html = resp.text();
+    expect(html).toContain(`<script src="/__/highlight-lang/selfreg"></script>`);
+    expect(html).not.toContain('registerLanguage("selfreg"');
+  });
+
+  it("serves the configured file's contents at the highlight-lang route", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "markdraftjs-hl-"));
+    writeFixture(dir, "fixture-lang.js", "/* fixture body */");
+    const client = await ts("text", {
+      highlight_languages: [{ name: "fixture", path: path.join(dir, "fixture-lang.js") }],
+    });
+    const resp = await client.get("/__/highlight-lang/fixture");
+    expect(resp.statusCode).toBe(200);
+    expect(resp.text()).toContain("/* fixture body */");
+  });
+
+  it("404s the highlight-lang route for a name that isn't configured", async () => {
+    const client = await ts("text");
+    const resp = await client.get("/__/highlight-lang/nope");
+    expect(resp.statusCode).toBe(404);
+  });
+
+  it("skips a configured entry whose file is missing, without crashing the page", async () => {
+    const client = await ts("text", {
+      highlight_languages: [{ name: "ghost", path: "/no/such/file/ghost.js" }],
+    });
+    const resp = await client.get("/");
+    expect(resp.statusCode).toBe(200);
+    expect(resp.text()).not.toContain("highlight-lang/ghost");
+  });
+});

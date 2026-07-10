@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { AssetCache } from "./assets.js";
 import { KATEX_CSS_URL } from "./config.js";
 import { ReadmeNotFoundError } from "./errors.js";
+import { registrationScript, resolveHighlightLanguages } from "./highlight.js";
 import type { ReadmeReader } from "./readers.js";
 import type { ServerConfig } from "./types.js";
 import { FileWatcher } from "./watcher.js";
@@ -225,7 +226,28 @@ export class PreviewServer {
       refresh_url: refreshUrl,
       data_color_mode: dataColorMode,
       page_body: pageBody,
+      highlight_language_scripts: this.buildHighlightLanguageScripts(),
     });
+  }
+
+  // Custom `HIGHLIGHT_LANGUAGES` entries: one `<script src>` per configured
+  // language (served via `handleHighlightLanguage` below, never an arbitrary
+  // client-supplied path), plus a `hljs.registerLanguage(...)` call for
+  // entries with a `global` (self-registering files need only the `src`
+  // load). Emitted into `{highlight_language_scripts}`, which the template
+  // places after `highlight.min.js` and before `markdraft.js`, so
+  // `hljs.getLanguage(name)` is truthy by the time the renderer runs.
+  private buildHighlightLanguageScripts(): string {
+    const cfg = this.config;
+    const resolved = resolveHighlightLanguages(cfg.highlight_languages, cfg.quiet);
+    const parts: string[] = [];
+    for (const entry of resolved) {
+      const url = `${cfg.url_prefix}/highlight-lang/${encodeURIComponent(entry.name)}`;
+      parts.push(`  <script src="${url}"></script>`);
+      const registration = registrationScript(entry);
+      if (registration) parts.push(registration);
+    }
+    return parts.join("\n");
   }
 
   listen(): Promise<void> {
@@ -269,6 +291,8 @@ export class PreviewServer {
         this.handleApiRefresh(urlPath, urlPrefix, req, res);
       } else if (urlPath.startsWith(urlPrefix + "/static/")) {
         this.handleStatic(urlPath, urlPrefix, res);
+      } else if (urlPath.startsWith(urlPrefix + "/highlight-lang/")) {
+        this.handleHighlightLanguage(urlPath, urlPrefix, res);
       } else {
         this.handlePage(urlPath, res);
       }
@@ -466,6 +490,26 @@ export class PreviewServer {
     }
 
     this.sendError(res, 404);
+  }
+
+  // Serves the file for one configured `HIGHLIGHT_LANGUAGES` entry, looked
+  // up by `name` against the validated config list -- never by a
+  // client-supplied path, so a request can only ever reach a file the
+  // operator explicitly listed in their own settings.json.
+  private handleHighlightLanguage(
+    urlPath: string,
+    urlPrefix: string,
+    res: http.ServerResponse,
+  ): void {
+    const prefix = urlPrefix + "/highlight-lang/";
+    const name = decodeURIComponent(urlPath.slice(prefix.length));
+    const resolved = resolveHighlightLanguages(this.config.highlight_languages, this.config.quiet);
+    const entry = resolved.find((e) => e.name === name);
+    if (!entry) {
+      this.sendError(res, 404);
+      return;
+    }
+    this.serveFile(res, entry.path);
   }
 
   private serveFile(res: http.ServerResponse, filepath: string): void {

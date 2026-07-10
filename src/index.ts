@@ -24,4 +24,6 @@ export type {
   ContentResponse,
   DirectoryEntry,
   UserSettings,
+  HighlightLanguageConfig,
 } from "./types.js";
+export { resolveHighlightLanguages, registrationScript } from "./highlight.js";

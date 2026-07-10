@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type { UserSettings } from "./types.js";
+import type { HighlightLanguageConfig, UserSettings } from "./types.js";
 
 // -- Readme file discovery ---------------------------------------------------
 
@@ -65,6 +65,26 @@ export const CDN_ASSETS: Record<string, string> = {
 // that the CDN serves automatically). Not cached locally.
 export const KATEX_CSS_URL = "https://cdn.jsdelivr.net/npm/katex@0.16/dist/katex.min.css";
 
+// Parses a single `HIGHLIGHT_LANGUAGES` entry, dropping (returning null for)
+// anything malformed: `name`/`path` are required non-empty strings, `global`
+// is an optional string. Relative `path`s are resolved against the config
+// home; absolute paths pass through unchanged. Existence of the resolved
+// file is intentionally NOT checked here -- that happens at render time (see
+// `src/highlight.ts`), so a settings.json written before its language file
+// exists isn't treated as malformed.
+function parseHighlightLanguageEntry(item: unknown, home: string): HighlightLanguageConfig | null {
+  if (item === null || typeof item !== "object") return null;
+  const rec = item as Record<string, unknown>;
+  if (typeof rec.name !== "string" || rec.name === "") return null;
+  if (typeof rec.path !== "string" || rec.path === "") return null;
+  if (rec.global !== undefined && typeof rec.global !== "string") return null;
+
+  const resolvedPath = path.isAbsolute(rec.path) ? rec.path : path.join(home, rec.path);
+  const entry: HighlightLanguageConfig = { name: rec.name, path: resolvedPath };
+  if (typeof rec.global === "string") entry.global = rec.global;
+  return entry;
+}
+
 export function loadUserSettings(configHome?: string): UserSettings {
   const home = configHome ?? process.env.MARKDRAFT_HOME ?? DEFAULT_CONFIG_HOME;
   const settingsFile = path.join(home, "settings.json");
@@ -79,6 +99,11 @@ export function loadUserSettings(configHome?: string): UserSettings {
     if (typeof data.PORT === "number") result.PORT = data.PORT;
     if (typeof data.AUTOREFRESH === "boolean") result.AUTOREFRESH = data.AUTOREFRESH;
     if (typeof data.QUIET === "boolean") result.QUIET = data.QUIET;
+    if (Array.isArray(data.HIGHLIGHT_LANGUAGES)) {
+      result.HIGHLIGHT_LANGUAGES = data.HIGHLIGHT_LANGUAGES.map((item) =>
+        parseHighlightLanguageEntry(item, home),
+      ).filter((entry): entry is HighlightLanguageConfig => entry !== null);
+    }
     return result;
   } catch {
     return {};

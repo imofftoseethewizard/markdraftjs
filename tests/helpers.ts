@@ -83,6 +83,7 @@ const DEFAULT_CONFIG: ServerConfig = {
   user_content: false,
   wide: false,
   url_prefix: "/__",
+  highlight_languages: [],
 };
 
 export async function createServer(
