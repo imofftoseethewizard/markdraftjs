@@ -17,7 +17,7 @@ import type { ReadmeReader } from "./readers.js";
 import { PreviewServer } from "./server.js";
 import type { ServerConfig, HighlightLanguageConfig, UserSettings } from "./types.js";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 
 function resolveConfig(
   opts: {

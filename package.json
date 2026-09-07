@@ -1,6 +1,6 @@
 {
   "name": "markdraft",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Preview local markdown files with mermaid diagram support.",
   "type": "module",
   "exports": {

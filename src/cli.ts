@@ -2,7 +2,7 @@ import { parseArgs } from "node:util";
 
 import { clearCache, exportFile, serve } from "./api.js";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 const VALID_THEME_OPTIONS = ["light", "dark", "auto"];
 const HELP = `Usage: draft [options] [path] [address]
 
