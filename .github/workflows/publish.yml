@@ -1,0 +1,43 @@
+name: Publish to npm
+
+# Publishes with npm trusted publishing (OIDC) -- there is no NPM_TOKEN
+# secret. The npmjs.com side of the pairing must name this repository and
+# this workflow file ("publish.yml", matched exactly and case-sensitively)
+# as a trusted publisher for the package, with the environment field left
+# blank to match the job below.
+#
+# The requirements that live on this side are: the id-token: write
+# permission, npm >= 11.5.1 and Node >= 22.14.0 at publish time, and a
+# GitHub-hosted runner (self-hosted runners aren't supported).
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Lets the job mint the OIDC token npm exchanges for a publish
+      # credential. Without this the publish fails with a 404/auth error.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Resolves to the latest 22.x, i.e. >= 22.14.0 as required.
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - run: pnpm test
+      # Node 22 bundles npm 10, which predates trusted publishing.
+      - run: npm install -g npm@latest
+      - run: npm --version
+      # No --provenance flag: trusted publishing generates and publishes
+      # provenance attestations by default. --access public is a no-op for
+      # an unscoped package, kept to state the intent.
+      - run: npm publish --access public

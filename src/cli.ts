@@ -201,8 +201,7 @@ main().then(
   (code) => process.exit(code),
   (e) => {
     const msg = e instanceof Error ? e.message : String(e);
-    const code =
-      e instanceof Error && "code" in e ? (e as NodeJS.ErrnoException).code : null;
+    const code = e instanceof Error && "code" in e ? (e as NodeJS.ErrnoException).code : null;
     if (code) {
       console.error(`Error (${code}): ${msg}`);
     } else {

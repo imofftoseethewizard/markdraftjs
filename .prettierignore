@@ -2,3 +2,5 @@ static/
 dist/
 pnpm-lock.yaml
 tests/input/
+README.md
+.pnpm-store/

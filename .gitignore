@@ -3,6 +3,10 @@ dist/
 
 # Dependencies
 node_modules/
+.pnpm-store/
+
+# Packaging artifacts
+*.tgz
 
 # Environment
 .env
