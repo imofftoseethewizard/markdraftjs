@@ -21,6 +21,7 @@
   "engines": {
     "node": ">=20"
   },
+  "packageManager": "pnpm@10.6.2",
   "scripts": {
     "build": "tsup && cp -r static/. dist/static",
     "dev": "tsx src/cli.ts",
