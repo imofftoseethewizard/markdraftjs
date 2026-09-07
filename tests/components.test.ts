@@ -7,6 +7,12 @@ import { AssetCache } from "../src/assets.js";
 import { CDN_ASSETS, loadUserSettings } from "../src/config.js";
 import { ReadmeNotFoundError } from "../src/errors.js";
 import { DirectoryReader, StdinReader, TextReader } from "../src/readers.js";
+import {
+  isSourceFile,
+  languageForFilename,
+  sourceLanguagesFrom,
+  wrapSourceText,
+} from "../src/source.js";
 import { FileWatcher } from "../src/watcher.js";
 import { inputPath } from "./helpers.js";
 
@@ -64,6 +70,29 @@ describe("DirectoryReader", () => {
     for (const e of entries) types[e.name] = e.type;
     expect(types["README.md"]).toBe("file");
     expect(types["sub"]).toBe("directory");
+  });
+
+  it("list directory includes source files", () => {
+    const dir = tmpDir();
+    fs.writeFileSync(path.join(dir, "README.md"), "hi");
+    fs.writeFileSync(path.join(dir, "main.rs"), "fn main() {}");
+    fs.writeFileSync(path.join(dir, "app.py"), "print(1)");
+    fs.writeFileSync(path.join(dir, "photo.png"), "");
+    const reader = new DirectoryReader(dir);
+    const names = reader.listDirectory().map((e) => e.name);
+    expect(names).toContain("main.rs");
+    expect(names).toContain("app.py");
+    expect(names).not.toContain("photo.png");
+  });
+
+  it("source files are not binary", () => {
+    const dir = tmpDir();
+    fs.writeFileSync(path.join(dir, "README.md"), "hi");
+    fs.writeFileSync(path.join(dir, "app.js"), "let x = 1;");
+    fs.writeFileSync(path.join(dir, "photo.png"), "");
+    const reader = new DirectoryReader(dir);
+    expect(reader.isBinary("app.js")).toBe(false);
+    expect(reader.isBinary("photo.png")).toBe(true);
   });
 
   it("is directory", () => {
@@ -444,6 +473,41 @@ describe("Config loading", () => {
     expect(result.HIGHLIGHT_LANGUAGES).toEqual([{ name: "ken", path: "/abs/ken.js" }]);
   });
 
+  it("HIGHLIGHT_LANGUAGES normalizes extensions", () => {
+    const dir = tmpDir();
+    fs.writeFileSync(
+      path.join(dir, "settings.json"),
+      JSON.stringify({
+        HIGHLIGHT_LANGUAGES: [
+          { name: "ken", path: "/abs/ken.js", extensions: ["KEN", ".Knx", "..kn", " kx "] },
+        ],
+      }),
+    );
+    const result = loadUserSettings(dir);
+    expect(result.HIGHLIGHT_LANGUAGES).toEqual([
+      { name: "ken", path: "/abs/ken.js", extensions: [".ken", ".knx", ".kn", ".kx"] },
+    ]);
+  });
+
+  it("HIGHLIGHT_LANGUAGES skips unusable extension items", () => {
+    const dir = tmpDir();
+    fs.writeFileSync(
+      path.join(dir, "settings.json"),
+      JSON.stringify({
+        HIGHLIGHT_LANGUAGES: [
+          { name: "ken", path: "/abs/ken.js", extensions: [".ken", "", ".", "a/b", "a b", 7] },
+          { name: "empty", path: "/abs/empty.js", extensions: [""] },
+          { name: "bad", path: "/abs/bad.js", extensions: "not-an-array" },
+        ],
+      }),
+    );
+    const result = loadUserSettings(dir);
+    expect(result.HIGHLIGHT_LANGUAGES).toEqual([
+      { name: "ken", path: "/abs/ken.js", extensions: [".ken"] },
+      { name: "empty", path: "/abs/empty.js" },
+    ]);
+  });
+
   it("HIGHLIGHT_LANGUAGES tolerates a non-array value", () => {
     const dir = tmpDir();
     fs.writeFileSync(
@@ -482,5 +546,98 @@ describe("ReadmeNotFoundError", () => {
 
   it("is Error", () => {
     expect(new ReadmeNotFoundError()).toBeInstanceOf(Error);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Source files
+// ---------------------------------------------------------------------------
+
+describe("languageForFilename", () => {
+  it("maps known extensions", () => {
+    expect(languageForFilename("src/main.rs")).toBe("rust");
+    expect(languageForFilename("app.py")).toBe("python");
+    expect(languageForFilename("Widget.TSX")).toBe("typescript");
+    expect(languageForFilename("settings.json")).toBe("json");
+  });
+
+  it("maps known basenames", () => {
+    expect(languageForFilename("Makefile")).toBe("makefile");
+    expect(languageForFilename("build/CMakeLists.txt")).toBe("cmake");
+    expect(languageForFilename("Dockerfile")).toBe("dockerfile");
+  });
+
+  it("leaves markdown and unknown files alone", () => {
+    expect(languageForFilename("README.md")).toBeNull();
+    expect(languageForFilename("notes.markdown")).toBeNull();
+    expect(languageForFilename("notes.txt")).toBeNull();
+    expect(languageForFilename("LICENSE")).toBeNull();
+    expect(languageForFilename(null)).toBeNull();
+  });
+
+  it("isSourceFile agrees", () => {
+    expect(isSourceFile("main.go")).toBe(true);
+    expect(isSourceFile("README.md")).toBe(false);
+  });
+});
+
+describe("wrapSourceText", () => {
+  it("wraps a source file in a tagged fence", () => {
+    expect(wrapSourceText("print(1)\n", "app.py")).toBe("```python\nprint(1)\n```\n");
+  });
+
+  it("adds a trailing newline when the file lacks one", () => {
+    expect(wrapSourceText("print(1)", "app.py")).toBe("```python\nprint(1)\n```\n");
+  });
+
+  it("wraps an empty file", () => {
+    expect(wrapSourceText("", "app.py")).toBe("```python\n```\n");
+  });
+
+  it("uses a longer fence than any backtick run in the file", () => {
+    const text = 'DOC = """\n```\n"""\n';
+    expect(wrapSourceText(text, "app.py")).toBe("````python\n" + text + "````\n");
+  });
+
+  it("counts indented backtick runs too", () => {
+    const text = "x = 1\n   ````\n";
+    expect(wrapSourceText(text, "app.py")).toBe("`````python\n" + text + "`````\n");
+  });
+
+  it("passes markdown through unchanged", () => {
+    expect(wrapSourceText("# Hi\n", "README.md")).toBe("# Hi\n");
+    expect(wrapSourceText("# Hi\n", null)).toBe("# Hi\n");
+  });
+});
+
+describe("sourceLanguagesFrom", () => {
+  it("maps configured extensions to the language name", () => {
+    const custom = sourceLanguagesFrom([
+      { name: "ken", path: "/tmp/ken.js", extensions: [".ken", ".knx"] },
+    ]);
+    expect(custom).toEqual({ ".ken": "ken", ".knx": "ken" });
+    expect(languageForFilename("lib/thing.ken", custom)).toBe("ken");
+    expect(wrapSourceText("x\n", "thing.knx", custom)).toBe("```ken\nx\n```\n");
+    expect(isSourceFile("thing.ken")).toBe(false);
+  });
+
+  it("matches an extensionless name against a configured extension", () => {
+    const custom = sourceLanguagesFrom([
+      { name: "makefile", path: "/tmp/make.js", extensions: ["justfile"] },
+    ]);
+    expect(languageForFilename("Justfile", custom)).toBe("makefile");
+  });
+
+  it("overrides the built-in tables", () => {
+    const custom = sourceLanguagesFrom([
+      { name: "objectivec", path: "/tmp/objc.js", extensions: [".h"] },
+    ]);
+    expect(languageForFilename("thing.h", custom)).toBe("objectivec");
+    expect(languageForFilename("thing.h")).toBe("c");
+  });
+
+  it("ignores entries without extensions", () => {
+    expect(sourceLanguagesFrom([{ name: "ken", path: "/tmp/ken.js" }])).toEqual({});
+    expect(sourceLanguagesFrom()).toEqual({});
   });
 });

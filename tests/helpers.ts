@@ -126,7 +126,9 @@ export async function createDirServer(
       fs.writeFileSync(filePath, content, "utf-8");
     }
   }
-  const reader = new DirectoryReader(tmpDir);
+  // Mirrors api.ts: the same configured languages reach the reader (which
+  // uses them to recognize source files) and the server config.
+  const reader = new DirectoryReader(tmpDir, false, configOverrides?.highlight_languages ?? []);
   const { client, server } = await createServer(reader, undefined, configOverrides);
   return { client, server, tmpDir };
 }

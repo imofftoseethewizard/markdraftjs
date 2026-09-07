@@ -27,3 +27,12 @@ export type {
   HighlightLanguageConfig,
 } from "./types.js";
 export { resolveHighlightLanguages, registrationScript } from "./highlight.js";
+export {
+  SOURCE_LANGUAGES,
+  SOURCE_FILENAMES,
+  sourceLanguagesFrom,
+  normalizeExtension,
+  languageForFilename,
+  isSourceFile,
+  wrapSourceText,
+} from "./source.js";

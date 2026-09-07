@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { normalizeExtension } from "./source.js";
 import type { HighlightLanguageConfig, UserSettings } from "./types.js";
 
 // -- Readme file discovery ---------------------------------------------------
@@ -67,21 +68,30 @@ export const KATEX_CSS_URL = "https://cdn.jsdelivr.net/npm/katex@0.16/dist/katex
 
 // Parses a single `HIGHLIGHT_LANGUAGES` entry, dropping (returning null for)
 // anything malformed: `name`/`path` are required non-empty strings, `global`
-// is an optional string. Relative `path`s are resolved against the config
-// home; absolute paths pass through unchanged. Existence of the resolved
-// file is intentionally NOT checked here -- that happens at render time (see
-// `src/highlight.ts`), so a settings.json written before its language file
-// exists isn't treated as malformed.
+// is an optional string, `extensions` is an optional array (individual
+// unusable items are skipped rather than dropping the entry). Relative
+// `path`s are resolved against the config home; absolute paths pass through
+// unchanged. Existence of the resolved file is intentionally NOT checked
+// here -- that happens at render time (see `src/highlight.ts`), so a
+// settings.json written before its language file exists isn't treated as
+// malformed.
 function parseHighlightLanguageEntry(item: unknown, home: string): HighlightLanguageConfig | null {
   if (item === null || typeof item !== "object") return null;
   const rec = item as Record<string, unknown>;
   if (typeof rec.name !== "string" || rec.name === "") return null;
   if (typeof rec.path !== "string" || rec.path === "") return null;
   if (rec.global !== undefined && typeof rec.global !== "string") return null;
+  if (rec.extensions !== undefined && !Array.isArray(rec.extensions)) return null;
 
   const resolvedPath = path.isAbsolute(rec.path) ? rec.path : path.join(home, rec.path);
   const entry: HighlightLanguageConfig = { name: rec.name, path: resolvedPath };
   if (typeof rec.global === "string") entry.global = rec.global;
+  if (Array.isArray(rec.extensions)) {
+    const extensions = rec.extensions
+      .map(normalizeExtension)
+      .filter((ext): ext is string => ext !== null);
+    if (extensions.length > 0) entry.extensions = extensions;
+  }
   return entry;
 }
 

@@ -90,6 +90,8 @@ where `draft` conflicts with
   [KaTeX](https://katex.org/)
 - **Syntax highlighting** -- code blocks highlighted by
   [highlight.js](https://highlightjs.org/)
+- **Source file preview** -- visiting a non-markdown source file
+  (`main.rs`, `app.py`, ...) renders it as a highlighted code block
 - **GitHub Alerts** -- `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`,
   `> [!WARNING]`, `> [!CAUTION]` styled callout boxes
 - **GeoJSON maps** -- ` ```geojson ` and ` ```topojson ` rendered as
@@ -206,6 +208,36 @@ $$\int_{-\infty}^{\infty} e^{-x^2} \, dx = \sqrt{\pi}$$
 | mermaid.js   | Diagrams            | 2.9 MB |
 
 
+## Source File Preview
+
+Visiting a file that isn't markdown but is a recognized source file
+renders it as a single highlighted code block instead of interpreting
+it as markdown. `draft src/main.rs` and clicking `app.py` in a
+directory listing both work; so does `--export`.
+
+The file's contents are wrapped server-side in a fence tagged with the
+matching highlight.js language, so the client renderer needs no special
+case: highlighting, live reload and export all behave exactly as they
+do for a code block written by hand. A file that itself contains a line
+of backticks gets a longer fence, so its contents are always quoted
+verbatim.
+
+Recognized files are listed in `src/source.ts`: about 100 extensions
+(`.rs`, `.py`, `.go`, `.rb`, `.ts`, `.sql`, `.yaml`, ...) plus a few
+extensionless names (`Makefile`, `Dockerfile`, `Gemfile`,
+`CMakeLists.txt`). They also show up in directory listings and in the
+sibling-file nav, alongside markdown files.
+
+Anything not on that list is untouched and still renders as markdown --
+including `.md`/`.markdown`, plain `.txt`, and extensionless files.
+Images, fonts and other binary types are served as before.
+
+To add or override an extension, give it to a `HIGHLIGHT_LANGUAGES`
+entry (see below). An extension mapped to a language highlight.js
+doesn't actually ship still renders as a code block -- highlight.js
+falls back to auto-detection for a fence language it doesn't know.
+
+
 ## CLI Reference
 
 ```
@@ -275,7 +307,8 @@ highlight.js language definer via `HIGHLIGHT_LANGUAGES` in
     {
       "name": "ken",
       "path": "/workspaces/ken/tooling/highlight-js/ken.js",
-      "global": "hljsDefineKen"
+      "global": "hljsDefineKen",
+      "extensions": [".ken"]
     }
   ]
 }
@@ -292,13 +325,27 @@ Each entry:
   function to, for a plain `<script>` that doesn't call
   `hljs.registerLanguage` itself. Omit this for a file that self-registers,
   such as most official highlight.js CDN language files.
+- `extensions` (optional) -- file extensions to preview as this language,
+  as described under [Source File Preview](#source-file-preview). Each is
+  lowercased and given a leading dot, so `"ken"` and `".Ken"` are the same
+  entry, and is matched against a file's extension or, for a file with no
+  extension, its whole name (so `"justfile"` matches `Justfile`). These
+  take precedence over Markdraft's built-in table, so listing `".h"` here
+  re-points `.h` files from C to your language.
 
-A malformed entry (missing/wrong-typed `name` or `path`, or a non-string
-`global`) is dropped silently at config-parse time. A well-formed entry whose
-file can't be found at render time is skipped with a `console.warn` (unless
-`QUIET` is set) rather than crashing the preview. Markdraft doesn't know
-anything about any specific language -- Ken is just an example consumer of a
-generic facility; register any highlight.js-compatible definer the same way.
+A malformed entry (missing/wrong-typed `name` or `path`, a non-string
+`global`, or a non-array `extensions`) is dropped silently at
+config-parse time; an unusable item within `extensions` (empty, or
+containing whitespace or a path separator) is skipped on its own. A
+well-formed entry whose file can't be found at render time is skipped
+with a `console.warn` (unless `QUIET` is set) rather than crashing the
+preview. Markdraft doesn't know anything about any specific language --
+Ken is just an example consumer of a generic facility; register any
+highlight.js-compatible definer the same way.
+
+Only `name` and `path` are needed to highlight a ` ```name ` fence written
+by hand; `extensions` is what additionally makes files of that language
+render as source when visited.
 
 Both the live server and `--export` inject the configured language(s) after
 `highlight.min.js` and before Markdraft's own renderer script runs, so
@@ -341,6 +388,7 @@ Modules:
 | `watcher.ts`  | File change detection for auto-refresh |
 | `browser.ts`  | Browser tab opening                    |
 | `config.ts`   | Constants, CDN URLs, settings loader   |
+| `source.ts`   | Source file extension/language mapping |
 | `cli.ts`      | CLI argument parsing                   |
 
 

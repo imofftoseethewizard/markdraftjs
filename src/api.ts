@@ -15,22 +15,24 @@ import { exportPage } from "./export.js";
 import { DirectoryReader, StdinReader } from "./readers.js";
 import type { ReadmeReader } from "./readers.js";
 import { PreviewServer } from "./server.js";
-import type { ServerConfig } from "./types.js";
+import type { ServerConfig, HighlightLanguageConfig, UserSettings } from "./types.js";
 
 const VERSION = "1.0.0";
 
-function resolveConfig(opts: {
-  host?: string | null;
-  port?: number | null;
-  autorefresh?: boolean | null;
-  quiet?: boolean | null;
-  theme?: string;
-  title?: string | null;
-  userContent?: boolean;
-  wide?: boolean;
-  urlPrefix?: string;
-}): ServerConfig {
-  const settings = loadUserSettings();
+function resolveConfig(
+  opts: {
+    host?: string | null;
+    port?: number | null;
+    autorefresh?: boolean | null;
+    quiet?: boolean | null;
+    theme?: string;
+    title?: string | null;
+    userContent?: boolean;
+    wide?: boolean;
+    urlPrefix?: string;
+  },
+  settings: UserSettings,
+): ServerConfig {
   return {
     host: opts.host ?? settings.HOST ?? HOST,
     port: opts.port ?? settings.PORT ?? PORT,
@@ -45,9 +47,15 @@ function resolveConfig(opts: {
   };
 }
 
-function makeReader(p?: string | null): ReadmeReader {
+// `highlightLanguages` reaches the reader because a configured extension
+// makes a file source rather than markdown, which the reader needs to know
+// when listing a directory and when deciding whether a file is binary.
+function makeReader(
+  p?: string | null,
+  highlightLanguages: HighlightLanguageConfig[] = [],
+): ReadmeReader {
   if (p === "-") return new StdinReader();
-  return new DirectoryReader(p);
+  return new DirectoryReader(p, false, highlightLanguages);
 }
 
 function makeCache(): AssetCache {
@@ -69,18 +77,22 @@ export async function serve(opts: {
   quiet?: boolean | null;
   theme?: string;
 }): Promise<void> {
-  const reader = makeReader(opts.path);
+  const settings = loadUserSettings();
+  const reader = makeReader(opts.path, settings.HIGHLIGHT_LANGUAGES ?? []);
   const assets = makeCache();
-  const config = resolveConfig({
-    host: opts.host,
-    port: opts.port,
-    autorefresh: opts.autorefresh,
-    quiet: opts.quiet,
-    theme: opts.theme,
-    title: opts.title,
-    userContent: opts.userContent,
-    wide: opts.wide,
-  });
+  const config = resolveConfig(
+    {
+      host: opts.host,
+      port: opts.port,
+      autorefresh: opts.autorefresh,
+      quiet: opts.quiet,
+      theme: opts.theme,
+      title: opts.title,
+      userContent: opts.userContent,
+      wide: opts.wide,
+    },
+    settings,
+  );
 
   await assets.ensureCached(config.quiet);
 
@@ -119,10 +131,11 @@ export async function exportFile(opts: {
   quiet?: boolean;
   theme?: string;
 }): Promise<void> {
-  const reader = makeReader(opts.path);
+  const settings = loadUserSettings();
+  const highlightLanguages = settings.HIGHLIGHT_LANGUAGES ?? [];
+  const reader = makeReader(opts.path, highlightLanguages);
   const assets = makeCache();
   await assets.ensureCached(opts.quiet ?? false);
-  const settings = loadUserSettings();
 
   let exportToStdout = opts.outFilename === "-";
   let outFilename = opts.outFilename ?? null;
@@ -155,7 +168,7 @@ export async function exportFile(opts: {
     userContent: opts.userContent,
     wide: opts.wide,
     quiet: opts.quiet,
-    highlightLanguages: settings.HIGHLIGHT_LANGUAGES ?? [],
+    highlightLanguages,
   });
 }
 

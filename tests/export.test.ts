@@ -252,3 +252,31 @@ describe("ExportOutput", () => {
     expect(html).toContain("<!DOCTYPE html>");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Source files
+// ---------------------------------------------------------------------------
+
+describe("SourceFileExport", () => {
+  it("embeds a source file as a fenced code block", () => {
+    const reader = new TextReader("fn main() {}\n", "main.rs");
+    const html = exportPage(reader, null, makeAssets());
+    expect(html).toContain("```rust\nfn main() {}\n```");
+    expect(html).toContain("main.rs - Markdraft");
+  });
+
+  it("uses a configured HIGHLIGHT_LANGUAGES extension", () => {
+    const reader = new TextReader("(hello)\n", "hello.ken");
+    const html = exportPage(reader, null, makeAssets(), {
+      highlightLanguages: [{ name: "ken", path: "/nonexistent/ken.js", extensions: [".ken"] }],
+      quiet: true,
+    });
+    expect(html).toContain("```ken\n(hello)\n```");
+  });
+
+  it("leaves markdown unwrapped", () => {
+    const reader = new TextReader("# Hi\n", "README.md");
+    const html = exportPage(reader, null, makeAssets());
+    expect(html).toContain('<script id="markdraft-source" type="text/markdown"># Hi\n</script>');
+  });
+});

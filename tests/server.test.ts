@@ -327,6 +327,83 @@ describe("DirectoryListing", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Source files
+// ---------------------------------------------------------------------------
+
+describe("SourceFiles", () => {
+  it("content api wraps a source file in a fence", async () => {
+    const client = await ds({
+      "README.md": "# Root",
+      "main.rs": "fn main() {}\n",
+    });
+    const data = (await client.get("/__/api/content/main.rs")).json() as Record<string, unknown>;
+    expect(data.type).toBe("file");
+    expect(data.text).toBe("```rust\nfn main() {}\n```\n");
+    expect(data.filename).toBe("main.rs");
+  });
+
+  it("content api leaves markdown unwrapped", async () => {
+    const client = await ds({ "README.md": "# Root\n" });
+    const data = (await client.get("/__/api/content")).json() as Record<string, unknown>;
+    expect(data.text).toBe("# Root\n");
+  });
+
+  it("source file serves the html shell", async () => {
+    const client = await ds({ "README.md": "# Root", "app.py": "print(1)\n" });
+    const resp = await client.get("/app.py");
+    expect(resp.statusCode).toBe(200);
+    expect(resp.headers["content-type"]).toContain("text/html");
+    expect(resp.text()).toContain("app.py - Markdraft");
+  });
+
+  it("source file with a non-text mimetype is rendered, not served raw", async () => {
+    const client = await ds({ "README.md": "# Root", "app.js": "let x = 1;\n" });
+    const resp = await client.get("/app.js");
+    expect(resp.statusCode).toBe(200);
+    expect(resp.headers["content-type"]).toContain("text/html");
+    const data = (await client.get("/__/api/content/app.js")).json() as Record<string, unknown>;
+    expect(data.text).toBe("```javascript\nlet x = 1;\n```\n");
+  });
+
+  it("wraps a configured HIGHLIGHT_LANGUAGES extension", async () => {
+    const client = await ds(
+      { "README.md": "# Root", "hello.ken": "(hello)\n" },
+      {
+        highlight_languages: [{ name: "ken", path: "/nonexistent/ken.js", extensions: [".ken"] }],
+      },
+    );
+    const data = (await client.get("/__/api/content/hello.ken")).json() as Record<string, unknown>;
+    expect(data.text).toBe("```ken\n(hello)\n```\n");
+
+    const root = (await client.get("/__/api/content")).json() as Record<string, unknown>;
+    const siblings = (root.siblings as Array<{ name: string }>).map((e) => e.name);
+    expect(siblings).toContain("hello.ken");
+  });
+
+  it("an unconfigured extension still renders as markdown", async () => {
+    const client = await ds({ "README.md": "# Root", "hello.ken": "(hello)\n" });
+    const data = (await client.get("/__/api/content/hello.ken")).json() as Record<string, unknown>;
+    expect(data.text).toBe("(hello)\n");
+  });
+
+  it("source files appear in listings and sibling nav", async () => {
+    const client = await ds({
+      "README.md": "# Root",
+      "main.rs": "fn main() {}",
+      "docs/guide.md": "# Guide",
+      "docs/setup.sh": "echo hi",
+    });
+    const file = (await client.get("/__/api/content")).json() as Record<string, unknown>;
+    const siblings = (file.siblings as Array<{ name: string }>).map((e) => e.name);
+    expect(siblings).toContain("main.rs");
+
+    const listing = (await client.get("/__/api/content/docs/")).json() as Record<string, unknown>;
+    const names = (listing.entries as Array<{ name: string }>).map((e) => e.name);
+    expect(names).toContain("setup.sh");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Error handling
 // ---------------------------------------------------------------------------
 

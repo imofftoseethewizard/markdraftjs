@@ -4,7 +4,8 @@ import posixpath from "node:path/posix";
 
 import { DEFAULT_FILENAMES, DEFAULT_FILENAME, SUPPORTED_EXTENSIONS } from "./config.js";
 import { ReadmeNotFoundError } from "./errors.js";
-import type { DirectoryEntry } from "./types.js";
+import { isSourceFile, sourceLanguagesFrom } from "./source.js";
+import type { DirectoryEntry, HighlightLanguageConfig } from "./types.js";
 
 const MIME_MAP: Record<string, string> = {
   ".md": "text/markdown",
@@ -97,9 +98,19 @@ export abstract class ReadmeReader {
 export class DirectoryReader extends ReadmeReader {
   readonly rootDirectory: string;
   readonly rootFilename: string | null;
+  // Extension -> language contributions from the user's
+  // `HIGHLIGHT_LANGUAGES`, so a configured extension is recognized as
+  // source here too -- listed in directory listings, and previewed rather
+  // than served raw.
+  private readonly sourceLanguages: Record<string, string>;
 
-  constructor(inputPath: string | null = null, silent = false) {
+  constructor(
+    inputPath: string | null = null,
+    silent = false,
+    highlightLanguages: HighlightLanguageConfig[] = [],
+  ) {
     super();
+    this.sourceLanguages = sourceLanguagesFrom(highlightLanguages);
     const p = path.normalize(inputPath ?? ".");
 
     if (fs.existsSync(p) && fs.statSync(p).isDirectory()) {
@@ -158,6 +169,10 @@ export class DirectoryReader extends ReadmeReader {
   }
 
   override isBinary(subpath: string | null = null): boolean {
+    // Source files are served as a rendered page (their contents wrapped in
+    // a code fence), even when their mimetype isn't text/* -- e.g. `.js`
+    // is application/javascript but is still source to be highlighted.
+    if (isSourceFile(subpath, this.sourceLanguages)) return false;
     const mimetype = this.mimetypeFor(subpath);
     return Boolean(mimetype && !mimetype.startsWith("text/"));
   }
@@ -205,7 +220,10 @@ export class DirectoryReader extends ReadmeReader {
       const full = path.join(dirpath, name);
       if (fs.statSync(full).isDirectory()) {
         entries.push({ name, type: "directory" });
-      } else if (SUPPORTED_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+      } else if (
+        SUPPORTED_EXTENSIONS.some((ext) => name.endsWith(ext)) ||
+        isSourceFile(name, this.sourceLanguages)
+      ) {
         entries.push({ name, type: "file" });
       }
     }

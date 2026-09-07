@@ -10,6 +10,7 @@ import { KATEX_CSS_URL } from "./config.js";
 import { ReadmeNotFoundError } from "./errors.js";
 import { registrationScript, resolveHighlightLanguages } from "./highlight.js";
 import type { ReadmeReader } from "./readers.js";
+import { sourceLanguagesFrom, wrapSourceText } from "./source.js";
 import type { ServerConfig } from "./types.js";
 import { FileWatcher } from "./watcher.js";
 
@@ -145,11 +146,15 @@ export class PreviewServer {
   readonly abortController: AbortController;
   private server: http.Server;
   private template: string | null = null;
+  // Extension -> language contributions from `HIGHLIGHT_LANGUAGES`, used
+  // when deciding how to wrap a source file (see `handleApiContent`).
+  private readonly sourceLanguages: Record<string, string>;
 
   constructor(reader: ReadmeReader, assets: AssetCache, config: ServerConfig) {
     this.reader = reader;
     this.assets = assets;
     this.config = config;
+    this.sourceLanguages = sourceLanguagesFrom(config.highlight_languages);
     this.abortController = new AbortController();
     setMaxListeners(0, this.abortController.signal);
     this.server = http.createServer((req, res) => this.handleRequest(req, res));
@@ -413,7 +418,11 @@ export class PreviewServer {
     }
     const siblings = this.reader.listDirectory(navDir);
 
-    const textStr = typeof text === "string" ? text : text.toString("utf-8");
+    const raw = typeof text === "string" ? text : text.toString("utf-8");
+    // A source file (.rs, .py, ...) is handed to the client as a fenced
+    // code block so the markdown renderer highlights it rather than
+    // interpreting the source as markdown.
+    const textStr = wrapSourceText(raw, filename, this.sourceLanguages);
     const body = JSON.stringify({
       type: "file",
       text: textStr,

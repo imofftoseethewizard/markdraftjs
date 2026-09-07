@@ -32,6 +32,13 @@ export interface HighlightLanguageConfig {
    * language files).
    */
   global?: string;
+  /**
+   * File extensions whose contents should be previewed as this language
+   * (see `src/source.ts`). Normalized at config-parse time to lowercase
+   * with a leading dot, and matched against a file's extension or, for an
+   * extensionless file, its whole name.
+   */
+  extensions?: string[];
 }
 
 export interface ContentFileResponse {

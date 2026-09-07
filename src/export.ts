@@ -6,6 +6,7 @@ import { AssetCache } from "./assets.js";
 import { CDN_ASSETS, KATEX_CSS_URL } from "./config.js";
 import { registrationScript, resolveHighlightLanguages } from "./highlight.js";
 import type { ReadmeReader } from "./readers.js";
+import { sourceLanguagesFrom, wrapSourceText } from "./source.js";
 import type { HighlightLanguageConfig } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -154,8 +155,11 @@ export function exportPage(
   } = options;
 
   const raw = reader.read(subpath);
-  const text = typeof raw === "string" ? raw : raw.toString("utf-8");
+  const contents = typeof raw === "string" ? raw : raw.toString("utf-8");
   const filename = reader.filenameFor(subpath) ?? "";
+  // A source file (.rs, .py, ...) is embedded as a fenced code block so the
+  // exported page highlights it, exactly as the live server does.
+  const text = wrapSourceText(contents, filename, sourceLanguagesFrom(highlightLanguages));
 
   const pageTitle = title ?? (filename ? filename + " - Markdraft" : "Markdraft");
   const displayTitle = escapeHtml(title ?? filename);
